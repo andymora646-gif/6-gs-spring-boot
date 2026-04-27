@@ -2,18 +2,22 @@ pipeline {
     agent any
     
     tools {
+        // Ensure this matches the name you gave Maven in 'Global Tool Configuration'
         maven '3.9.11'
     }
 
     environment {
-        NEXUS_URL = '192.168.1.100:8081' // Use your VM IP
+        // REPLACE with your Ubuntu VM IP
+        NEXUS_URL = '192.168.1.100:8081' 
+        // Ensure this matches the ID in Manage Jenkins > Credentials
         CREDENTIALS_ID = 'nexus-credentials'
     }
+
     stages {
         stage('Build and Package') {
             steps {
-                // Use 'dir' to move into the folder containing pom.xml
-                dir('complete') { 
+                // Navigate into the folder containing pom.xml
+                dir('complete') {
                     sh 'mvn clean package -DskipTests'
                 }
             }
@@ -22,15 +26,21 @@ pipeline {
         stage('Push to Nexus') {
             steps {
                 script {
-                    // Again, wrap in 'dir' so it finds the pom.xml for reading
+                    // Navigate into the folder so readMavenPom can find the file
                     dir('complete') {
+                        // Fixes "No such property: POM" error
                         def pom = readMavenPom file: 'pom.xml'
+                        
                         def artifactId = pom.artifactId
                         def version = pom.version
                         def groupId = pom.groupId
                         def jarPath = "target/${artifactId}-${version}.jar"
+                        
+                        // Automatically chooses Snapshot or Release repo
                         def targetRepo = version.endsWith("-SNAPSHOT") ? "maven-snapshots" : "maven-releases"
                         
+                        echo "Uploading ${artifactId} to ${targetRepo}..."
+
                         nexusArtifactUploader(
                             nexusVersion: 'nexus3',
                             protocol: 'http',
@@ -48,11 +58,13 @@ pipeline {
             }
         }
     }
-    
-        }
-    
-    
+
     post {
-        failure { echo "Build or Upload failed." }
+        success {
+            echo 'Build and Nexus Upload Successful!'
+        }
+        failure {
+            echo 'Build failed. Check if the folder name in dir() is correct and Nexus is running.'
+        }
     }
 }
