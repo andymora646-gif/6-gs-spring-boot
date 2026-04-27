@@ -38,31 +38,32 @@ pipeline {
          stage('Push to Nexus') {
             steps {
                 script {
-                    // Extract version/artifact ID from POM
-                    def artifactId = "${POM.artifactId}"
-                    def version = "${POM.version}"
-                    def jarPath = "target/${artifactId}-${version}.jar"
+                    // This line fixes the 'No such property: POM' error
+                    def pom = readMavenPom file: 'pom.xml'
                     
-                    echo "Uploading ${jarPath} to ${NEXUS_REPO}..."
-
+                    // Now you can use 'pom' variable to get version and artifactId
+                    def artifactId = "${pom.artifactId}"
+                    def version = "${pom.version}"
+                    def groupId = "${pom.groupId}"
+                    def jarPath = "target/${artifactId}-${version}.jar"
+        
+                    echo "Uploading ${jarPath} to Nexus..."
+                    
                     nexusArtifactUploader(
-                        nexusVersion: "${NEXUS_VERSION}",
-                        protocol: "${PROTOCOL}",
-                        nexusUrl: "${NEXUS_URL}",
-                        groupId: "${POM.groupId}",
-                        version: "${version}",
-                        repository: "${NEXUS_REPO}",
-                        credentialsId: "${CREDENTIALS_ID}",
+                        nexusVersion: 'nexus3', // or 'nexus2' depending on your setup
+                        protocol: 'http',
+                        nexusUrl: 'your-nexus-ip:8081',
+                        groupId: groupId,
+                        version: version,
+                        repository: 'maven-releases', // Use 'maven-snapshots' if version ends in -SNAPSHOT
+                        credentialsId: 'nexus-credentials', // The ID you created in Jenkins
                         artifacts: [
-                            [artifactId: "${artifactId}",
-                             classifier: '',
-                             file: "${jarPath}",
-                             type: 'jar']
+                            [artifactId: artifactId, classifier: '', file: jarPath, type: 'jar']
                         ]
                     )
                 }
             }
-         }
+        }
     }
 
     post {
