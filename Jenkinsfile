@@ -12,11 +12,12 @@ pipeline {
     }
 
     stages {
-        stage('Checkout Source Code') {
-            steps {
-                git branch: 'main', url: 'https://github.com'
-            }
-        }
+stage('Checkout Source Code') {
+    steps {
+        // FIX: Use your full GitHub repository URL
+        git branch: 'main', url: 'https://github.com'
+    }
+}
 
         stage('Build and Package') {
             steps {
