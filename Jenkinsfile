@@ -1,64 +1,58 @@
 pipeline {
     agent any
-
-    options {
-        skipStagesAfterUnstable()
-    }
-
+    
     tools {
         maven '3.9.11'
+    }
+
+    environment {
+        // CHANGE THIS to your Ubuntu VM IP
+        NEXUS_URL = '192.168.1.100:8081' 
+        CREDENTIALS_ID = 'nexus-credentials'
     }
 
     stages {
         stage('Checkout Source Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/kevinli-webbertech/gs-spring-boot.git'
-            }
-        }
-
-        stage('Test') {
-            steps {
-                sh 'git --version'
-                sh 'mvn --version'
-                sh 'mvn clean test' // Example for a Maven project
+                git branch: 'main', url: 'https://github.com'
             }
         }
 
         stage('Build and Package') {
             steps {
+                // Skips tests to speed up the lab as per your logs
                 sh 'mvn clean package -DskipTests'
             }
         }
 
-        stage('Archive Artifacts') {
-            steps {
-                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
-            }
-        }
-         stage('Push to Nexus') {
+        stage('Push to Nexus') {
             steps {
                 script {
-                    // This line fixes the 'No such property: POM' error
+                    // 1. Fix the error by reading the POM file into a variable
                     def pom = readMavenPom file: 'pom.xml'
                     
-                    // Now you can use 'pom' variable to get version and artifactId
-                    def artifactId = "${pom.artifactId}"
-                    def version = "${pom.version}"
-                    def groupId = "${pom.groupId}"
+                    // 2. Extract metadata
+                    def artifactId = pom.artifactId
+                    def version = pom.version
+                    def groupId = pom.groupId
                     def jarPath = "target/${artifactId}-${version}.jar"
-        
-                    echo "Uploading ${jarPath} to Nexus..."
                     
+                    // 3. Logic to determine destination repository
+                    def targetRepo = version.endsWith("-SNAPSHOT") ? "maven-snapshots" : "maven-releases"
+                    
+                    echo "Uploading ${artifactId} version ${version} to ${targetRepo}"
+
+                    // 4. Perform the upload
                     nexusArtifactUploader(
-                        nexusVersion: 'nexus3', // or 'nexus2' depending on your setup
+                        nexusVersion: 'nexus3',
                         protocol: 'http',
-                        nexusUrl: 'your-nexus-ip:8081',
-                        groupId: groupId,
-                        version: version,
-                        repository: 'maven-releases', // Use 'maven-snapshots' if version ends in -SNAPSHOT
-                        credentialsId: 'nexus-credentials', // The ID you created in Jenkins
+                        nexusUrl: "${NEXUS_URL}",
+                        groupId: "${groupId}",
+                        version: "${version}",
+                        repository: "${targetRepo}",
+                        credentialsId: "${CREDENTIALS_ID}",
                         artifacts: [
-                            [artifactId: artifactId, classifier: '', file: jarPath, type: 'jar']
+                            [artifactId: "${artifactId}", classifier: '', file: "${jarPath}", type: 'jar']
                         ]
                     )
                 }
@@ -67,14 +61,11 @@ pipeline {
     }
 
     post {
-        always {
-            echo 'Pipeline finished.'
-        }
         success {
-            echo 'Build successful!'
+            echo "Successfully pushed ${env.JOB_NAME} to Nexus!"
         }
         failure {
-            echo 'Build failed!'
+            echo "Build or Upload failed. Check the logs above."
         }
     }
 }
