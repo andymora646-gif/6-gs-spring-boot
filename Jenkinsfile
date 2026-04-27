@@ -1,10 +1,6 @@
 pipeline {
     agent any
     
-    tools {
-        maven '3.9.11'
-    }
-
     environment {
         // REPLACE with your actual Ubuntu VM IP
         NEXUS_URL = '192.168.1.100:8081' 
@@ -12,40 +8,24 @@ pipeline {
     }
 
     stages {
-        stage('Check Workspace') {
-            steps {
-                // This will list files so you can see where pom.xml is in the logs
-                sh 'ls -R' 
-            }
-        }
-
-        stage('Build and Package') {
-            steps {
-                // Running directly in the root
-                sh 'mvn clean package -DskipTests'
-            }
-        }
-
-        stage('Push to Nexus') {
+        stage('Push Existing Jar to Nexus') {
             steps {
                 script {
-                    // Fixes "No such property: POM" error
-                    def pom = readMavenPom file: 'pom.xml'
+                    // Since pom.xml is missing, we hardcode the metadata for the lab
+                    def artifactId = "spring-boot-complete"
+                    def version = "0.0.1-SNAPSHOT"
+                    def groupId = "com.example"
+                    def jarPath = "target/spring-boot-complete-0.0.1-SNAPSHOT.jar"
                     
-                    def artifactId = pom.artifactId
-                    def version = pom.version
-                    def groupId = pom.groupId
-                    def jarPath = "target/${artifactId}-${version}.jar"
-                    
-                    def targetRepo = version.endsWith("-SNAPSHOT") ? "maven-snapshots" : "maven-releases"
-                    
+                    echo "Uploading existing artifact to Nexus..."
+
                     nexusArtifactUploader(
                         nexusVersion: 'nexus3',
                         protocol: 'http',
                         nexusUrl: "${NEXUS_URL}",
                         groupId: "${groupId}",
                         version: "${version}",
-                        repository: "${targetRepo}",
+                        repository: "maven-snapshots",
                         credentialsId: "${CREDENTIALS_ID}",
                         artifacts: [
                             [artifactId: "${artifactId}", classifier: '', file: "${jarPath}", type: 'jar']
@@ -53,12 +33,6 @@ pipeline {
                     )
                 }
             }
-        }
-    }
-
-    post {
-        failure {
-            echo 'Build failed. Check the "Check Workspace" stage log to see where pom.xml is.'
         }
     }
 }
