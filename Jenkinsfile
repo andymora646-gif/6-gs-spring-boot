@@ -1,34 +1,51 @@
 pipeline {
     agent any
-    
-environment {
-    // Change this from 192.168.1.100 to localhost
-    NEXUS_URL = 'localhost:8081' 
-    NEXUS_CREDS = credentials('nexus-credentials')
-}
+
+    options {
+        skipStagesAfterUnstable()
+    }
+
+    tools {
+        maven '3.9.11'
+    }
 
     stages {
-        stage('Push to Nexus (Manual Upload)') {
+        stage('Checkout Source Code') {
             steps {
-                script {
-                    def jarFile = "target/spring-boot-complete-0.0.1-SNAPSHOT.jar"
-                    def repoUrl = "http://${NEXUS_URL}/repository/maven-snapshots/com/example/spring-boot-complete/0.0.1-SNAPSHOT/spring-boot-complete-0.0.1-SNAPSHOT.jar"
-                    
-                    echo "Uploading to: ${repoUrl}"
-                    
-                    // Using CURL to bypass plugin metadata errors
-                    sh """
-                    curl -v -u ${NEXUS_CREDS_USR}:${NEXUS_CREDS_PSW} \
-                    --upload-file ${jarFile} \
-                    ${repoUrl}
-                    """
-                }
+                git branch: 'main', url: 'https://github.com/kevinli-webbertech/gs-spring-boot.git'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh 'git --version'
+                sh 'mvn --version'
+                sh 'mvn clean test' // Example for a Maven project
+            }
+        }
+
+        stage('Build and Package') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('Archive Artifacts') {
+            steps {
+                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
     }
-    
+
     post {
-        success { echo "Check Nexus now! The file should be there." }
-        failure { echo "Still failing. Check the 'curl' output above for a 401 (Auth) or 404 (URL) error." }
+        always {
+            echo 'Pipeline finished.'
+        }
+        success {
+            echo 'Build successful!'
+        }
+        failure {
+            echo 'Build failed!'
+        }
     }
 }
