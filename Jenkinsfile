@@ -2,54 +2,34 @@ pipeline {
     agent any
     
     environment {
-        // REPLACE with your Ubuntu VM IP (where Nexus is running)
-        NEXUS_URL = '192.168.1.100:8081' 
-        // Ensure this ID matches what you created in Jenkins Credentials
-        CREDENTIALS_ID = 'nexus-credentials'
+        // 1. Double check this IP! Run 'hostname -I' on your VM to be sure.
+        NEXUS_URL = '192.168.1.100:8081'
+        // 2. Use your Nexus credentials ID here
+        NEXUS_CREDS = credentials('nexus-credentials')
     }
 
     stages {
-        stage('Push to Nexus') {
+        stage('Push to Nexus (Manual Upload)') {
             steps {
                 script {
-                    // Hardcoding metadata since your GitHub repo is missing the pom.xml file
-                    def artifactId = "spring-boot-complete"
-                    def version = "0.0.1-SNAPSHOT"
-                    def groupId = "com.example"
+                    def jarFile = "target/spring-boot-complete-0.0.1-SNAPSHOT.jar"
+                    def repoUrl = "http://${NEXUS_URL}/repository/maven-snapshots/com/example/spring-boot-complete/0.0.1-SNAPSHOT/spring-boot-complete-0.0.1-SNAPSHOT.jar"
                     
-                    // We point to the target/ folder where we saw the JAR in your previous logs
-                    def jarPath = "target/spring-boot-complete-0.0.1-SNAPSHOT.jar"
+                    echo "Uploading to: ${repoUrl}"
                     
-                    echo "Uploading ${jarPath} to Nexus at ${NEXUS_URL}..."
-
-                    nexusArtifactUploader(
-                        nexusVersion: 'nexus3',
-                        protocol: 'http',
-                        nexusUrl: "${NEXUS_URL}",
-                        groupId: "${groupId}",
-                        version: "${version}",
-                        repository: "maven-snapshots",
-                        credentialsId: "${CREDENTIALS_ID}",
-                        artifacts: [
-                            [
-                                artifactId: "${artifactId}", 
-                                classifier: '', 
-                                file: "${jarPath}", 
-                                type: 'jar'
-                            ]
-                        ]
-                    )
+                    // Using CURL to bypass plugin metadata errors
+                    sh """
+                    curl -v -u ${NEXUS_CREDS_USR}:${NEXUS_CREDS_PSW} \
+                    --upload-file ${jarFile} \
+                    ${repoUrl}
+                    """
                 }
             }
         }
     }
-
+    
     post {
-        success {
-            echo "Successfully pushed to Nexus! Check http://${NEXUS_URL}/#browse/browse:maven-snapshots"
-        }
-        failure {
-            echo "Upload failed. 1. Check if Nexus is up. 2. Verify 'Strict Content Type Validation' is OFF in Nexus."
-        }
+        success { echo "Check Nexus now! The file should be there." }
+        failure { echo "Still failing. Check the 'curl' output above for a 401 (Auth) or 404 (URL) error." }
     }
 }
