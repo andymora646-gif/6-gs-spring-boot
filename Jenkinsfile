@@ -1,12 +1,11 @@
 pipeline {
     agent any
     
-    environment {
-        // 1. Double check this IP! Run 'hostname -I' on your VM to be sure.
-        NEXUS_URL = '192.168.1.100:8081'
-        // 2. Use your Nexus credentials ID here
-        NEXUS_CREDS = credentials('nexus-credentials')
-    }
+environment {
+    // Change this from 192.168.1.100 to localhost
+    NEXUS_URL = 'localhost:8081' 
+    NEXUS_CREDS = credentials('nexus-credentials')
+}
 
     stages {
         stage('Push to Nexus (Manual Upload)') {
